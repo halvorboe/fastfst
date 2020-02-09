@@ -233,3 +233,10 @@ func BenchmarkBuilder(b *testing.B) {
 		}
 	}
 }
+
+var ballast []byte
+
+func init() {
+	ballast := make([]byte, 10<<30)
+	_ = ballast
+}

@@ -10,10 +10,10 @@ type nodeBuilder struct {
 	output      uint64
 }
 
-func newNodeBuilder(output uint64) nodeBuilder {
-	final := output == 0
-	// transitions := make([]transition, 0, 10)
-	return nodeBuilder{final, nil, output}
+func newNodeBuilder() nodeBuilder {
+	builder := nodeBuilder{transitions: make([]transition, 0, 32)}
+	builder.Reset()
+	return builder
 }
 
 func (nb *nodeBuilder) Compile() {
@@ -28,15 +28,23 @@ func (nb *nodeBuilder) Reset() {
 
 // Builder builds a FST.
 type Builder struct {
-	lastKey []byte
-	stack   []nodeBuilder
+	lastKey  []byte
+	stack    []*nodeBuilder
+	builders []nodeBuilder
+	existing map[int]int
 }
 
 // New creates a new builder.
 func New() (*Builder, error) {
+	builders := make([]nodeBuilder, 0, 100)
+	for i := 0; i < 100; i++ {
+		builders = append(builders, newNodeBuilder())
+	}
 	return &Builder{
-		lastKey: []byte(""),
-		stack:   make([]nodeBuilder, 0, 100),
+		lastKey:  []byte(""),
+		stack:    make([]*nodeBuilder, 0, 64),
+		builders: builders,
+		existing: make(map[int]int, 1000),
 	}, nil
 }
 
@@ -50,7 +58,11 @@ func (b *Builder) Insert(key []byte, value uint64) error {
 	b.stack = b.stack[:prefixLength]
 	// 4. Append the suffix to the stack.
 	for i := prefixLength; i < len(key); i++ {
-		b.stack = append(b.stack, newNodeBuilder(value))
+		if i > 0 {
+			b.stack[i-1].transitions = append(b.stack[i-1].transitions, transition{in: key[i]})
+		}
+		b.stack = append(b.stack, &b.builders[len(b.stack)])
+		b.stack[len(b.stack)-1].Reset()
 	}
 	// Update last key
 	b.lastKey = key
